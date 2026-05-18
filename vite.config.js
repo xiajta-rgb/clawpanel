@@ -10,6 +10,7 @@ const pkg = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url
 // 读取 Gateway 端口（启动时读取一次）
 // 注意：Gateway 默认端口是 18789，不是 18790
 let gatewayPort = 18789
+let gatewayToken = ''
 try {
   const cfgPath = path.join(homedir(), '.openclaw', 'openclaw.json')
   if (fs.existsSync(cfgPath)) {
@@ -18,6 +19,10 @@ try {
     const port = cfg?.gateway?.port
     if (port && typeof port === 'number' && port > 0 && port < 65536) {
       gatewayPort = port
+    }
+    // 读取 Gateway token 用于代理认证
+    if (cfg?.gateway?.auth?.token) {
+      gatewayToken = cfg.gateway.auth.token
     }
   }
 } catch (e) {
@@ -43,6 +48,11 @@ export default defineConfig({
         timeout: 30000,
         configure: (proxy, options) => {
           proxy.on('proxyReqWs', (proxyReq, req, socket) => {
+            // 转发 Authorization 头（如果存在）
+            const authHeader = req.headers['authorization']
+            if (authHeader) {
+              proxyReq.setHeader('Authorization', authHeader)
+            }
             socket.setTimeout(30000)
             socket.on('timeout', () => {
               console.warn('[vite/ws] WebSocket 超时，关闭连接')
